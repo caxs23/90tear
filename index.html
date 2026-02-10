@@ -182,6 +182,7 @@
         // --- Asset Configuration ---
         const INITIAL_BAG = "https://raw.githubusercontent.com/caxs23/90tear/main/NS.png";
         const BAG_POOL = [
+            "https://raw.githubusercontent.com/caxs23/90tear/main/NS.png", // Added NS.png here to rotate
             "https://raw.githubusercontent.com/caxs23/90tear/main/10dw.png",
             "https://raw.githubusercontent.com/caxs23/90tear/main/5ds.png",
             "https://raw.githubusercontent.com/caxs23/90tear/main/5dw.png",
@@ -190,6 +191,7 @@
             "https://raw.githubusercontent.com/caxs23/90tear/main/tpn.png"
         ];
         const TEAR_IMG = "https://raw.githubusercontent.com/caxs23/90tear/main/tear.png";
+        const TEAR_AUDIO_URL = "https://raw.githubusercontent.com/caxs23/90tear/main/Shocked.mp3"; // Audio URL added
 
         // --- Game State ---
         let score = 0;
@@ -209,6 +211,9 @@
         const milestonePopup = document.getElementById('milestone-popup');
         const milestoneCount = document.getElementById('milestone-count');
         const milestoneMsg = document.getElementById('milestone-msg');
+
+        // --- Audio Object ---
+        const tearAudio = new Audio(TEAR_AUDIO_URL);
 
         // --- Milestone Messages ---
         const MILESTONE_MSGS = [
@@ -232,7 +237,7 @@
             isFirstBag = true;
             isTearing = false;
             
-            preloadImages([...BAG_POOL, INITIAL_BAG, TEAR_IMG]);
+            preloadImages([...BAG_POOL, TEAR_IMG]);
             loadNextBag();
         }
 
@@ -321,6 +326,10 @@
         function performTear() {
             if (isTearing) return;
             isTearing = true;
+
+            // 0. Play Audio
+            tearAudio.currentTime = 0;
+            tearAudio.play().catch(e => console.log("Audio play failed:", e));
 
             // 1. Update Score
             score++;
