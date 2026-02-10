@@ -70,7 +70,7 @@
             width: 100%;
             height: 100%;
             object-fit: cover; /* 꽉 차게 */
-            transition: transform 0.1s;
+            transition: opacity 0.1s; /* 부드러운 사라짐 */
         }
 
         .tear-overlay {
@@ -83,7 +83,7 @@
             opacity: 0;
             pointer-events: none;
             z-index: 20;
-            mix-blend-mode: multiply; /* 자연스럽게 겹치도록 */
+            /* mix-blend-mode 제거: 단독으로 선명하게 보이기 위해 */
         }
 
         /* Particles */
@@ -93,6 +93,25 @@
             border-radius: 50%;
             pointer-events: none;
             z-index: 50;
+        }
+
+        /* Milestone Popup */
+        #milestone-popup {
+            pointer-events: none;
+            text-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            transform: scale(0);
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        
+        .milestone-active {
+            transform: scale(1) !important;
+            animation: pulse-milestone 1s infinite;
+        }
+
+        @keyframes pulse-milestone {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
         }
     </style>
 </head>
@@ -120,7 +139,7 @@
         <!-- UI Header -->
         <div class="absolute top-0 left-0 w-full z-40 p-6 flex justify-between items-start pointer-events-none">
             <div class="bg-white/90 backdrop-blur-sm rounded-2xl px-5 py-3 shadow-xl border-l-4 border-red-500">
-                <span class="block text-xs text-gray-500 font-bold uppercase tracking-wider">Torn Bags</span>
+                <span class="block text-xs text-gray-500 font-bold uppercase tracking-wider">찢은 수액백</span>
                 <span id="score" class="text-4xl font-black text-gray-800 font-impact">0</span>
             </div>
             
@@ -129,6 +148,14 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
             </button>
+        </div>
+
+        <!-- Milestone Popup -->
+        <div id="milestone-wrapper" class="absolute inset-0 z-50 flex items-center justify-center pointer-events-none">
+            <div id="milestone-popup" class="flex flex-col items-center">
+                <span id="milestone-count" class="text-6xl text-yellow-400 font-impact drop-shadow-md mb-2"></span>
+                <span id="milestone-msg" class="text-4xl text-white font-bold drop-shadow-md"></span>
+            </div>
         </div>
 
         <!-- Main Game Area -->
@@ -151,11 +178,8 @@
         <div id="particles" class="absolute inset-0 pointer-events-none overflow-hidden z-30"></div>
     </div>
 
-    <!-- Audio for impact (Optional placeholder logic implemented visually) -->
-
     <script>
         // --- Asset Configuration ---
-        // Using Raw GitHub URLs
         const INITIAL_BAG = "https://raw.githubusercontent.com/caxs23/90tear/main/NS.png";
         const BAG_POOL = [
             "https://raw.githubusercontent.com/caxs23/90tear/main/10dw.png",
@@ -182,6 +206,14 @@
         const scoreEl = document.getElementById('score');
         const particlesContainer = document.getElementById('particles');
         const hintEl = document.getElementById('hint');
+        const milestonePopup = document.getElementById('milestone-popup');
+        const milestoneCount = document.getElementById('milestone-count');
+        const milestoneMsg = document.getElementById('milestone-msg');
+
+        // --- Milestone Messages ---
+        const MILESTONE_MSGS = [
+            "대단해요!", "놀라워요!", "미쳤다!", "전설의 등장!", "멈출 수 없어!", "스트레스 타파!", "신의 손!"
+        ];
 
         // --- Initialization ---
         function startGame() {
@@ -200,9 +232,7 @@
             isFirstBag = true;
             isTearing = false;
             
-            // Preload images for smoother experience
             preloadImages([...BAG_POOL, INITIAL_BAG, TEAR_IMG]);
-
             loadNextBag();
         }
 
@@ -211,6 +241,7 @@
             gameScreen.classList.remove('flex');
             startScreen.style.display = 'flex';
             setTimeout(() => startScreen.style.opacity = '1', 10);
+            hideMilestone();
         }
 
         function preloadImages(urls) {
@@ -226,7 +257,9 @@
             tearOverlay.classList.remove('tear-flash');
             tearOverlay.style.opacity = '0';
             
-            // Remove shake class
+            // Show original bag again
+            bagImg.style.opacity = '1'; 
+            
             gameArea.classList.remove('shake-active');
 
             if (isFirstBag) {
@@ -234,7 +267,6 @@
                 isFirstBag = false;
             } else {
                 if (currentBagQueue.length === 0) {
-                    // Refill and shuffle
                     currentBagQueue = [...BAG_POOL].sort(() => Math.random() - 0.5);
                 }
                 bagImg.src = currentBagQueue.pop();
@@ -255,7 +287,6 @@
         }, { passive: false });
 
         gameArea.addEventListener('touchmove', (e) => {
-           // Prevent scrolling while swiping
            e.preventDefault(); 
         }, { passive: false });
 
@@ -266,7 +297,6 @@
             handleSwipe(startX, endX, startY, endY);
         });
 
-        // Mouse support for testing on PC
         gameArea.addEventListener('mousedown', (e) => {
             if (isTearing) return;
             startX = e.clientX;
@@ -282,7 +312,6 @@
             const diffX = end - start;
             const diffY = endY - startY;
 
-            // Threshold for swipe (horizontal dominant)
             if (Math.abs(diffX) > 50 && Math.abs(diffX) > Math.abs(diffY)) {
                 performTear();
             }
@@ -303,33 +332,57 @@
             // 2. Visual Impact
             gameArea.classList.add('shake-active');
             
-            // Show Tear Overlay
+            // HIDE Original Bag & Show Tear Overlay
+            bagImg.style.opacity = '0'; // Hide the bag behind
             tearOverlay.style.opacity = '1';
             tearOverlay.classList.add('tear-flash');
 
-            // Slight zoom out of background bag to emphasize the rip
-            bagImg.style.transform = "scale(0.95)";
-
             // 3. Particles
-            createParticles();
+            createGravityParticles();
 
-            // 4. Vibrate (Mobile only)
-            if (navigator.vibrate) {
-                navigator.vibrate([50, 50, 50]); // Strong vibration pattern
+            // 4. Milestone Check
+            if (score > 0 && score % 10 === 0) {
+                showMilestone(score);
+                // Extra celebration particles
+                setTimeout(() => createGravityParticles(true), 200);
             }
 
-            // 5. Transition to next
+            // 5. Vibrate
+            if (navigator.vibrate) {
+                navigator.vibrate([50, 50, 50]);
+            }
+
+            // 6. Transition to next
             setTimeout(() => {
                 loadNextBag();
-            }, 800); // Wait for animation
+                if (score % 10 !== 0) hideMilestone(); // Hide text if not a milestone currently active
+            }, 800);
         }
 
-        // --- Particle System ---
-        function createParticles() {
-            const particleCount = 30;
-            const colors = ['#87CEEB', '#B0E0E6', '#E0F7FA', '#ffffff']; // Sky blues and white
+        // --- Milestone Logic ---
+        function showMilestone(count) {
+            const randomMsg = MILESTONE_MSGS[Math.floor(Math.random() * MILESTONE_MSGS.length)];
+            milestoneCount.innerText = `${count}개 돌파!`;
+            milestoneMsg.innerText = randomMsg;
+            
+            milestonePopup.classList.add('milestone-active');
+            
+            // Auto hide after 2 seconds
+            setTimeout(() => {
+                hideMilestone();
+            }, 2000);
+        }
 
-            // Center of screen
+        function hideMilestone() {
+            milestonePopup.classList.remove('milestone-active');
+        }
+
+        // --- Physics Particle System (Gravity) ---
+        function createGravityParticles(isExplosion = false) {
+            const particleCount = isExplosion ? 60 : 35;
+            const colors = ['#87CEEB', '#B0E0E6', '#E0F7FA', '#ffffff', '#4FC3F7'];
+
+            // Origin: center of screen usually, or where user swiped roughly (using center for simplicity)
             const originX = window.innerWidth / 2;
             const originY = window.innerHeight / 2;
 
@@ -345,28 +398,41 @@
                 // Random color
                 p.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
                 
-                // Initial position (center with slight offset)
+                // Initial position
                 p.style.left = originX + 'px';
                 p.style.top = originY + 'px';
                 
                 particlesContainer.appendChild(p);
 
-                // Animation Physics
-                const angle = Math.random() * Math.PI * 2;
-                const velocity = Math.random() * 200 + 100; // Speed
-                const tx = Math.cos(angle) * velocity;
-                const ty = Math.sin(angle) * velocity;
+                // Physics Variables
+                // Spread X: Random between -15 and 15
+                let vx = (Math.random() - 0.5) * (window.innerWidth < 500 ? 15 : 25); 
+                // Initial Upward Velocity Y: Random between -15 and -25 (Negative is up)
+                let vy = -(Math.random() * 15 + 15);
+                // Gravity
+                const gravity = 1.2;
                 
-                // Animate
-                const animation = p.animate([
-                    { transform: 'translate(0, 0) scale(1)', opacity: 1 },
-                    { transform: `translate(${tx}px, ${ty}px) scale(0)`, opacity: 0 }
-                ], {
-                    duration: 600 + Math.random() * 200,
-                    easing: 'cubic-bezier(0, .9, .57, 1)',
-                });
+                let posX = originX;
+                let posY = originY;
+                let opacity = 1;
 
-                animation.onfinish = () => p.remove();
+                // Animation Loop for this particle
+                function update() {
+                    posX += vx;
+                    posY += vy;
+                    vy += gravity; // Apply gravity
+                    opacity -= 0.015; // Fade out
+
+                    p.style.transform = `translate(${posX - originX}px, ${posY - originY}px)`;
+                    p.style.opacity = opacity;
+
+                    if (opacity > 0 && posY < window.innerHeight) {
+                        requestAnimationFrame(update);
+                    } else {
+                        p.remove();
+                    }
+                }
+                requestAnimationFrame(update);
             }
         }
     </script>
